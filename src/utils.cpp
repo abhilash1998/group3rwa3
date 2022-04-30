@@ -1,145 +1,73 @@
+#include "utils.hpp"
 
-#include <ros/ros.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/TransformStamped.h>
+
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
+
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+
 #include <array>
-#include "utils.h"
 
-// // keep the angle range between + -3.14
-// double motioncontrol::adjustYaw(double yaw) {
-//     auto result = yaw;
-//     if (result > 3.14 || result < -3.14) {
-//         if (result > 3.14)
-//             result -= 6.28;
-//         else
-//             result += 6.28;
-//     }
-
-//     return result;
-
-// }
-
-namespace motioncontrol {
-
-
-    void print(const tf2::Quaternion& quat) {
-        ROS_INFO("[x: %f, y: %f, z: %f, w: %f]",
-            quat.getX(), quat.getY(), quat.getZ(), quat.getW());
-    }
-
-    void print(const geometry_msgs::Pose& pose) {
-        auto rpy = eulerFromQuaternion(pose);
-
-        ROS_INFO("position: [x: %f, y: %f, z: %f]\norientation(quat): [x: %f, y: %f, z: %f, w: %f]\norientation(rpy): [roll: %f, pitch: %f, yaw: %f]",
-            pose.position.x, pose.position.y, pose.position.z,
-            pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w,
-            rpy[0], rpy[1], rpy[2]);
-    }
-
-    tf2::Quaternion quaternionFromEuler(double r, double p, double y) {
+namespace utils
+{
+    tf2::Quaternion quaternionFromEuler(double r, double p, double y)
+    {
         tf2::Quaternion q;
         q.setRPY(r, p, y);
-        // ROS_INFO("quat: [%f, %f, %f, %f]",
-        //     q.getX(),
-        //     q.getY(),
-        //     q.getZ(),
-        //     q.getW());
-
         return q;
     }
 
-    std::array<double, 3> eulerFromQuaternion(const tf2::Quaternion& quat) {
+    std::array<double, 3> eulerFromQuaternion(double x, double y, double z, double w)
+    {
+        const tf2::Matrix3x3 m(tf2::Quaternion(x, y, z, w));
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+        return {roll, pitch, yaw};
+    }
 
-        tf2::Quaternion q(
+    std::array<double, 3> eulerFromQuaternion(const tf2::Quaternion& quat)
+    {
+        return eulerFromQuaternion(
             quat.getX(),
             quat.getY(),
             quat.getZ(),
-            quat.getW());
-        tf2::Matrix3x3 m(q);
-
-
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-
-        ROS_INFO("[%f, %f, %f]", roll, pitch, yaw);
-
-        std::array<double, 3> rpy_array{ roll, pitch, yaw };
-        return rpy_array;
+            quat.getW()
+        );
     }
 
-    std::array<double, 3> eulerFromQuaternion(
-        const geometry_msgs::Pose& pose) {
-        tf2::Quaternion q(
+    std::array<double, 3> eulerFromQuaternion(const geometry_msgs::Pose& pose)
+    {
+        return eulerFromQuaternion(
             pose.orientation.x,
             pose.orientation.y,
             pose.orientation.z,
-            pose.orientation.w);
-        tf2::Matrix3x3 m(q);
-
-
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-        ROS_INFO("[%f, %f, %f]", roll, pitch, yaw);
-
-        std::array<double, 3> rpy_array{ roll, pitch, yaw };
-        return rpy_array;
+            pose.orientation.w
+        );
     }
 
-    std::array<double, 3> eulerFromQuaternion(
-        double x, double y, double z, double w) {
-        tf2::Quaternion q(x, y, z, w);
-        tf2::Matrix3x3 m(q);
-
-
-        double roll, pitch, yaw;
-        m.getRPY(roll, pitch, yaw);
-
-        ROS_INFO("%f, %f, %f", roll, pitch, yaw);
-
-        std::array<double, 3> rpy_array{ roll, pitch, yaw };
-        return rpy_array;
-    }
-
-    geometry_msgs::Pose transformToWorldFrame(std::string part_in_camera_frame) {
-        tf2_ros::Buffer tfBuffer;
-        tf2_ros::TransformListener tfListener(tfBuffer);
+    geometry_msgs::Pose transformToWorldFrame(const std::string& part_in_camera_frame, tf2_ros::Buffer& tfBuffer)
+    {
         ros::Rate rate(10);
         ros::Duration timeout(1.0);
-
 
         geometry_msgs::TransformStamped world_target_tf;
         geometry_msgs::TransformStamped ee_target_tf;
 
-
-        // for (int i = 0; i < 10; i++) {
-        //     try {
-        //         world_target_tf = tfBuffer.lookupTransform("world", part_in_camera_frame,
-        //             ros::Time(0), timeout);
-        //     }
-        //     catch (tf2::TransformException& ex) {
-        //         ROS_WARN("%s", ex.what());
-        //         ros::Duration(1.0).sleep();
-                
-        //         continue;
-        //     }
-        // }
-        int j=0;
-        for (int i = 0; j < 10; i++) {
+        for (int i = 0; i < 10; i++)
+        {
             try {
-                world_target_tf = tfBuffer.lookupTransform("world", part_in_camera_frame,
-                    ros::Time(0), timeout);
-                    j++;
-            }
-            catch (tf2::TransformException& ex) {
-                // ROS_WARN("%s", ex.what());
-                ROS_FATAL("Sensor Black Out");
+                world_target_tf = tfBuffer.lookupTransform(
+                    "world",
+                    part_in_camera_frame,
+                    ros::Time(0),
+                    timeout
+                );
+            } catch (tf2::TransformException& ex) {
+                ROS_WARN("%s", ex.what());
                 ros::Duration(1.0).sleep();
-                
                 continue;
             }
         }
@@ -155,11 +83,16 @@ namespace motioncontrol {
 
         return world_target;
     }
-    
 
-    geometry_msgs::Pose transformToWorldFrame(
-        const geometry_msgs::Pose& target,
-        std::string agv) {
+    geometry_msgs::Pose transformToWorldFrame(const std::string& part_in_camera_frame)
+    {
+        tf2_ros::Buffer tfBuffer;
+        tf2_ros::TransformListener tfListener(tfBuffer);
+        return transformToWorldFrame(part_in_camera_frame, tfBuffer);
+    }
+
+    geometry_msgs::Pose transformToWorldFrame(const geometry_msgs::Pose& target, const std::string& agv, tf2_ros::Buffer& tfBuffer)
+    {
         static tf2_ros::StaticTransformBroadcaster br;
         geometry_msgs::TransformStamped transformStamped;
 
@@ -172,6 +105,14 @@ namespace motioncontrol {
             kit_tray = "kit_tray_3";
         else if (agv.compare("agv4") == 0)
             kit_tray = "kit_tray_4";
+        else if (agv.compare("as1") == 0)
+            kit_tray = "briefcase_1";
+        else if (agv.compare("as2") == 0)
+            kit_tray = "briefcase_2";
+        else if (agv.compare("as3") == 0)
+            kit_tray = "briefcase_3";
+        else if (agv.compare("as4") == 0)
+            kit_tray = "briefcase_4";
 
         transformStamped.header.stamp = ros::Time::now();
         transformStamped.header.frame_id = kit_tray;
@@ -184,26 +125,25 @@ namespace motioncontrol {
         transformStamped.transform.rotation.z = target.orientation.z;
         transformStamped.transform.rotation.w = target.orientation.w;
 
-
         for (int i{ 0 }; i < 15; ++i)
             br.sendTransform(transformStamped);
 
-        tf2_ros::Buffer tfBuffer;
-        tf2_ros::TransformListener tfListener(tfBuffer);
         ros::Rate rate(10);
         ros::Duration timeout(1.0);
-
 
         geometry_msgs::TransformStamped world_pose_tf;
         geometry_msgs::TransformStamped ee_target_tf;
 
-
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; i++)
+        {
             try {
-                world_pose_tf = tfBuffer.lookupTransform("world", "target_frame",
-                    ros::Time(0), timeout);
-            }
-            catch (tf2::TransformException& ex) {
+                world_pose_tf = tfBuffer.lookupTransform(
+                    "world",
+                    "target_frame",
+                    ros::Time(0),
+                    timeout
+                );
+            } catch (tf2::TransformException& ex) {
                 ROS_WARN("%s", ex.what());
                 ros::Duration(1.0).sleep();
                 continue;
@@ -220,5 +160,12 @@ namespace motioncontrol {
         world_pose.orientation.w = world_pose_tf.transform.rotation.w;
 
         return world_pose;
+    }
+
+    geometry_msgs::Pose transformToWorldFrame(const geometry_msgs::Pose& target, const std::string& agv)
+    {
+        tf2_ros::Buffer tfBuffer;
+        tf2_ros::TransformListener tfListener(tfBuffer);
+        return transformToWorldFrame(target, agv, tfBuffer);
     }
 }

@@ -48,7 +48,7 @@ Visualization Manager:
       MoveIt_Allow_Replanning: false
       MoveIt_Allow_Sensor_Positioning: false
       MoveIt_Planning_Attempts: 2
-      MoveIt_Planning_Time: 300
+      MoveIt_Planning_Time: 2000
       MoveIt_Use_Cartesian_Path: false
       MoveIt_Use_Constraint_Aware_IK: true
       MoveIt_Warehouse_Host: 127.0.0.1
@@ -400,4 +400,4 @@ Window Geometry:
     collapsed: false
   Width: 1853
   X: 1987
-  Y: 401
+  Y: 432
